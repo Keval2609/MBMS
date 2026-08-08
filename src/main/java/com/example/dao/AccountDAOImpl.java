@@ -21,7 +21,7 @@ public class AccountDAOImpl implements AccountDAO {
     @Override
     public Optional<Account> findByAccountNumber(String accountNumber) {
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM accounts WHERE account_number = ?")) {
+            PreparedStatement stmt = conn.prepareStatement("SELECT * FROM accounts WHERE account_number = ?")) {
             stmt.setString(1, accountNumber);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
