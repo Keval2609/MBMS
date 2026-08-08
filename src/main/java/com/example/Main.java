@@ -4,6 +4,7 @@ import com.example.dao.EmployeeDAOImpl;
 import com.example.domain.SessionContext;
 import com.example.service.AccountService;
 import com.example.service.AuthService;
+import com.example.dao.TransactionDAOImpl;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -19,6 +20,7 @@ public class Main {
         EmployeeDAOImpl employeeDAO = new EmployeeDAOImpl(DatabaseManager.getDataSource());
         AuthService authService = new AuthService(employeeDAO);
         AccountService accountService = new AccountService(DatabaseManager.getDataSource());
+        com.example.dao.TransactionDAOImpl transactionDAO = new com.example.dao.TransactionDAOImpl(DatabaseManager.getDataSource());
         
         Scanner scanner = new Scanner(System.in);
         SessionContext currentSession = null;
@@ -74,10 +76,11 @@ public class Main {
         while (running) {
             System.out.println("\n=== MAIN MENU ===");
             System.out.println("1. Transfer Funds");
+            System.out.println("2. View Transaction History");
             
             // RBAC in action: Only Admins see this option!
             if ("ADMIN".equals(currentSession.role())) {
-                System.out.println("2. System Configuration (Admin Only)");
+                System.out.println("3. System Configuration (Admin Only)");
             }
             
             System.out.println("0. Logout and Exit");
@@ -113,17 +116,64 @@ public class Main {
                         System.out.println("❌ Invalid input. Please enter valid numbers.");
                     }
                     break;
+                
                 case "2":
+                    System.out.println("\n--- Transaction History ---");
+                    try {
+                        System.out.print("Enter Account ID: ");
+                        Integer accId = Integer.parseInt(scanner.nextLine());
+                        
+                        java.util.List<com.example.domain.Transaction> history = transactionDAO.getTransactionsForAccount(accId);
+                        
+                        if (history.isEmpty()) {
+                            System.out.println("No transactions found for Account " + accId);
+                        } else {
+                            System.out.println("\nDate                | Ref Number                           | Type     | Amount   | Status");
+                            System.out.println("---------------------------------------------------------------------------------------------");
+                            for (com.example.domain.Transaction txn : history) {
+                                String action;
+                                String details;
+                                String sign;
+                                
+                                if (txn.getFromAccountId().equals(accId)) {
+                                    action = "DEBIT";
+                                    details = "To Acc " + txn.getToAccountId();
+                                    sign = "-"; // Money leaving
+                                } else {
+                                    action = "CREDIT";
+                                    details = "From Acc " + txn.getFromAccountId();
+                                    sign = "+"; // Money entering
+                                }
+                                // ============================================
+                                System.out.printf("%-19s | %-36s | %-6s | %-20s | %s$%-8.2f | %s%n", 
+                                    txn.getCreatedAt().toString().substring(0, 19), 
+                                    txn.getReferenceNumber(),
+                                    action,
+                                    details,
+                                    sign,
+                                    txn.getAmount(),
+                                    txn.getStatus()
+                                );
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("❌ Invalid input. Please enter a valid Account ID number.");
+                    }
+                    break;
+
+                case "3":
                     if ("ADMIN".equals(currentSession.role())) {
                         System.out.println("\n[Admin Configuration Menu - Coming Soon]");
                     } else {
                         System.out.println("\n❌ Invalid option.");
                     }
                     break;
+
                 case "0":
                     System.out.println("\nLogging out... Goodbye!");
                     running = false;
                     break;
+                    
                 default:
                     System.out.println("\n❌ Invalid option. Please try again.");
             }
