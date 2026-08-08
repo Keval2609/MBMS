@@ -43,7 +43,7 @@
             <version>10.10.0</version>
         </dependency>
         
-        <!-- FIXED: Correct Artifact ID for Flyway 10.x MySQL support -->
+        <!-- Correct Artifact ID for Flyway 10.x MySQL support -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
