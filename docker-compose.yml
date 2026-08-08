@@ -1,0 +1,15 @@
+services:
+  mysql-mbms:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mbms_db
+      MYSQL_USER: mbms_user
+      MYSQL_PASSWORD: mbms_password
+    ports:
+      - "3307:3306" # Changed host port to 3307
+    volumes:
+      - mbms_data:/var/lib/mysql
+
+volumes:
+  mbms_data:
