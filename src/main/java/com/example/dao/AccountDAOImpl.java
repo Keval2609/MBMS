@@ -58,4 +58,28 @@ public class AccountDAOImpl implements AccountDAO {
         }
         return false;
     }
+    
+    @Override
+    public Optional<Account> findById(Integer id) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM accounts WHERE id = ?")) {
+            stmt.setInt(1, id);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                Account account = new Account();
+                account.setId(rs.getInt("id"));
+                account.setCustomerId(rs.getInt("customer_id"));
+                account.setBranchId(rs.getInt("branch_id"));
+                account.setAccountNumber(rs.getString("account_number"));
+                account.setBalance(rs.getBigDecimal("balance"));
+                account.setStatus(AccountStatus.valueOf(rs.getString("status")));
+                account.setAccountType(AccountType.valueOf(rs.getString("account_type")));
+                account.setVersion(rs.getInt("version"));
+                return Optional.of(account);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
+    }
 }

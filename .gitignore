@@ -1,17 +1,26 @@
-# Compiled class files
+# Compiled class file
 *.class
 
-# Log files
+# Log file
 *.log
 
-# Package files
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
 *.jar
 *.war
+*.nar
 *.ear
+*.zip
+*.tar.gz
+*.rar
 
 # Maven
 target/
-.mvn/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -19,48 +28,12 @@ pom.xml.next
 release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
+.mvn/timing.properties
 
-# Gradle
-.gradle
-build/
-
-# IntelliJ IDEA
+# IDEs
 .idea/
 *.iml
-out/
-
-# Eclipse
+.vscode/
 .classpath
 .project
 .settings/
-
-# VS Code
-.vscode/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Temporary files
-*~
-*.swp
-tmp/
-temp/
-logs/
-
-# Environment files
-.env
-.env.local
-*.env
-
-# Database files
-*.db
-*.mv.db
-*.h2.db
-
-# Docker
-docker-compose.override.yml
-docker-compose.*.yml
-
-# Maven wrapper
-.mvn/wrapper/maven-wrapper.jar
