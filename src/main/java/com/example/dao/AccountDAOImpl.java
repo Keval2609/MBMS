@@ -3,43 +3,36 @@ package com.example.dao;
 import com.example.domain.Account;
 import com.example.domain.AccountStatus;
 import com.example.domain.AccountType;
-import com.zaxxer.hikari.HikariDataSource;
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Optional;
 
 public class AccountDAOImpl implements AccountDAO {
 
-    private final HikariDataSource dataSource;
+    private final DataSource dataSource;
 
     // Constructor injection
-    public AccountDAOImpl(HikariDataSource dataSource) {
+    public AccountDAOImpl(DataSource dataSource) {
         this.dataSource = dataSource;
     }
 
     @Override
     public Optional<Account> findByAccountNumber(String accountNumber) {
         try (Connection conn = dataSource.getConnection();
-            PreparedStatement stmt = conn.prepareStatement("SELECT * FROM accounts WHERE account_number = ?")) {
+             PreparedStatement stmt = conn.prepareStatement("SELECT * FROM accounts WHERE account_number = ?")) {
             stmt.setString(1, accountNumber);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                Account account = new Account();
-                account.setId(rs.getInt("id"));
-                account.setCustomerId(rs.getInt("customer_id"));
-                account.setBranchId(rs.getInt("branch_id"));
-                account.setAccountNumber(rs.getString("account_number"));
-                account.setBalance(rs.getBigDecimal("balance"));
-                account.setStatus(AccountStatus.valueOf(rs.getString("status")));
-                account.setAccountType(AccountType.valueOf(rs.getString("account_type")));
-                account.setVersion(rs.getInt("version"));
-                return Optional.of(account);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapRowToAccount(rs));
+                }
+                return Optional.empty();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error querying account by account number: " + accountNumber, e);
         }
-        return Optional.empty(); 
     }
 
     @Override
@@ -52,11 +45,10 @@ public class AccountDAOImpl implements AccountDAO {
             stmt.setInt(3, account.getId());
             stmt.setInt(4, account.getVersion());
             int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0; // Returns true if the update was successful
-        } catch (Exception e) {
-            e.printStackTrace();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error updating account id: " + account.getId(), e);
         }
-        return false;
     }
     
     @Override
@@ -64,22 +56,27 @@ public class AccountDAOImpl implements AccountDAO {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement("SELECT * FROM accounts WHERE id = ?")) {
             stmt.setInt(1, id);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                Account account = new Account();
-                account.setId(rs.getInt("id"));
-                account.setCustomerId(rs.getInt("customer_id"));
-                account.setBranchId(rs.getInt("branch_id"));
-                account.setAccountNumber(rs.getString("account_number"));
-                account.setBalance(rs.getBigDecimal("balance"));
-                account.setStatus(AccountStatus.valueOf(rs.getString("status")));
-                account.setAccountType(AccountType.valueOf(rs.getString("account_type")));
-                account.setVersion(rs.getInt("version"));
-                return Optional.of(account);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapRowToAccount(rs));
+                }
+                return Optional.empty();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (SQLException e) {
+            throw new RuntimeException("Error querying account by id: " + id, e);
         }
-        return Optional.empty();
+    }
+
+    private Account mapRowToAccount(ResultSet rs) throws SQLException {
+        Account account = new Account();
+        account.setId(rs.getInt("id"));
+        account.setCustomerId(rs.getInt("customer_id"));
+        account.setBranchId(rs.getInt("branch_id"));
+        account.setAccountNumber(rs.getString("account_number"));
+        account.setBalance(rs.getBigDecimal("balance"));
+        account.setStatus(AccountStatus.valueOf(rs.getString("status")));
+        account.setAccountType(AccountType.valueOf(rs.getString("account_type")));
+        account.setVersion(rs.getInt("version"));
+        return account;
     }
 }

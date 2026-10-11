@@ -2,6 +2,6 @@ package com.example.domain;
 
 public enum AccountStatus {
     ACTIVE,
-    INACTIVE,
+    FROZEN,
     CLOSED
 }
