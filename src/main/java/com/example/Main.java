@@ -25,26 +25,6 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
         SessionContext currentSession = null;
 
-        // ==========================================
-        // ONE-TIME FIX: FORCE ADMIN PASSWORD HASH
-        // ==========================================
-        try (java.sql.Connection conn = DatabaseManager.getDataSource().getConnection();
-             java.sql.PreparedStatement ps = conn.prepareStatement(
-                 "UPDATE employees SET password_hash = ? WHERE username = 'admin'")) {
-            
-            // Generate a mathematically perfect hash for the word "admin"
-            String validHash = org.mindrot.jbcrypt.BCrypt.hashpw("admin", org.mindrot.jbcrypt.BCrypt.gensalt());
-            ps.setString(1, validHash);
-            int rows = ps.executeUpdate();
-            
-            if (rows > 0) {
-                System.out.println("DEBUG: Admin password hash updated successfully!");
-            } else {
-                System.out.println("DEBUG: No user named 'admin' found! We need to INSERT one.");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
         // ==========================================
         // PHASE 1: THE LOGIN LOOP

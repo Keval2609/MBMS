@@ -39,3 +39,10 @@ buildNumber.properties
 .settings/
 demo_1.cast
 docs/
+
+# Local Environment and Secret Configuration
+.env
+.env.*
+!.env.example
+application-local.properties
+src/main/resources/application-local.properties

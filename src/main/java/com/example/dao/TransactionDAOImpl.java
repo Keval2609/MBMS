@@ -20,15 +20,7 @@ public class TransactionDAOImpl implements TransactionDAO {
     public List<Transaction> getTransactionsForAccount(Integer accountId) {
         List<Transaction> transactions = new ArrayList<>();
         
-        // ==========================================
-        // YOUR MISSION:
-        // 1. Write a SQL query that selects all columns from 'transactions' 
-        //    WHERE from_account_id = ? OR to_account_id = ?
-        //    ORDER BY created_at DESC (so newest is first).
-        // 2. Set BOTH question marks to the 'accountId' parameter.
-        // 3. Loop through the ResultSet using a while() loop, create Transaction 
-        //    objects, and add them to the list.
-        // ==========================================
+        
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(
                  "SELECT * FROM transactions WHERE from_account_id = ? OR to_account_id = ? ORDER BY timestamp DESC")) {

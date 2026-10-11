@@ -24,6 +24,22 @@ public class DatabaseManager {
                 }
             }
 
+            // Optional local overrides (git-ignored)
+            try (InputStream localInput = DatabaseManager.class.getClassLoader().getResourceAsStream("application-local.properties")) {
+                if (localInput != null) {
+                    props.load(localInput);
+                }
+            } catch (Exception ignored) {
+            }
+
+            java.io.File localConfigFile = new java.io.File("application-local.properties");
+            if (localConfigFile.exists()) {
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(localConfigFile)) {
+                    props.load(fis);
+                } catch (Exception ignored) {
+                }
+            }
+
             // Environment variables override properties file if provided
             String dbUrl = System.getenv("DB_URL") != null ? System.getenv("DB_URL") 
                     : props.getProperty("db.url", "jdbc:mysql://localhost:3307/mbms_db");
