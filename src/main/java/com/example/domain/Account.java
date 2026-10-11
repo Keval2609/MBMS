@@ -1,6 +1,7 @@
 package com.example.domain;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public class Account {
     private Integer id;
@@ -12,11 +13,9 @@ public class Account {
     private AccountStatus status;
     private Integer version; 
 
-    // Empty constructor for DAO instantiation
     public Account() {
     }
 
-    // Full constructor for creating new accounts in memory
     public Account(Integer id, Integer customerId, String accountNumber, Integer branchId, 
                    AccountType accountType, BigDecimal balance, AccountStatus status, Integer version) {
         this.id = id;
@@ -24,7 +23,7 @@ public class Account {
         this.accountNumber = accountNumber;
         this.branchId = branchId;
         this.accountType = accountType;
-        this.balance = balance;
+        this.balance = balance != null ? balance.setScale(2, RoundingMode.HALF_EVEN) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
         this.status = status;
         this.version = version;
     }
@@ -34,7 +33,9 @@ public class Account {
     public void setId(Integer id) { this.id = id; }
     
     public BigDecimal getBalance() { return balance; }
-    public void setBalance(BigDecimal balance) { this.balance = balance; }
+    public void setBalance(BigDecimal balance) { 
+        this.balance = balance != null ? balance.setScale(2, RoundingMode.HALF_EVEN) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN); 
+    }
     
     public Integer getVersion() { return version; }
     public void setVersion(Integer version) { this.version = version; }

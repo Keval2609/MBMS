@@ -1,36 +1,37 @@
 package com.example.service;
 
-import com.zaxxer.hikari.HikariDataSource;
+import com.example.dao.EmployeeDAO;
+import com.example.domain.Employee;
+import com.example.domain.Role;
+import com.example.domain.SessionContext;
 import org.mindrot.jbcrypt.BCrypt;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 
 public class AdminService {
 
-    private final HikariDataSource dataSource;
+    private final EmployeeDAO employeeDAO;
 
-    public AdminService(HikariDataSource dataSource) {
-        this.dataSource = dataSource;
+    public AdminService(EmployeeDAO employeeDAO) {
+        this.employeeDAO = employeeDAO;
     }
 
-    public boolean createEmployee(String username, String rawPassword, String role, Integer branchId) {
-        
-        // 1. Hash the password before it ever touches the database!
-        String hashedPassword = BCrypt.hashpw(rawPassword, BCrypt.gensalt());
+    public void createEmployee(SessionContext session, String username, String rawPassword, Role role, Integer branchId) {
+        session.requireRole(Role.ADMIN, Role.MANAGER, Role.BRANCH_MANAGER);
 
-        try (Connection conn = dataSource.getConnection()) {
-            String sql = "INSERT INTO employees (branch_id, username, password_hash, role) VALUES (?, ?, ?, ?)";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setInt(1, branchId);
-                stmt.setString(2, username);
-                stmt.setString(3, hashedPassword);
-                stmt.setString(4, role);
-                int rowsAffected = stmt.executeUpdate();
-                return rowsAffected > 0; // Return true if at least one row was inserted
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username cannot be blank");
         }
-        return false; 
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new IllegalArgumentException("Password cannot be blank");
+        }
+        if (role == null) {
+            throw new IllegalArgumentException("Role cannot be null");
+        }
+        if (branchId == null) {
+            throw new IllegalArgumentException("Branch ID cannot be null");
+        }
+
+        String hashedPassword = BCrypt.hashpw(rawPassword, BCrypt.gensalt());
+        Employee employee = new Employee(null, branchId, username.trim(), hashedPassword, role);
+        employeeDAO.insert(employee);
     }
 }
