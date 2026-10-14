@@ -16,4 +16,8 @@ public interface AccountDAO {
     void updateBalance(Connection conn, Integer id, BigDecimal newBalance);
     boolean update(Account account);
     boolean update(Connection conn, Account account);
+
+    Account insert(Account account);
+    Account insert(Connection conn, Account account);
+    String generateNextAccountNumber(Connection conn);
 }

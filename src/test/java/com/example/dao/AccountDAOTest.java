@@ -346,4 +346,60 @@ public class AccountDAOTest {
         assertTrue(ex.getMessage().contains("Error updating account id: 10"));
         assertInstanceOf(SQLException.class, ex.getCause());
     }
+
+    @Test
+    public void testInsertAccountSuccess() {
+        ResultSet genKeys = createProxy(ResultSet.class, (proxy, method, args) -> {
+            String name = method.getName();
+            if ("next".equals(name)) return true;
+            if ("getInt".equals(name)) return 77;
+            return null;
+        });
+
+        PreparedStatement stmt = createProxy(PreparedStatement.class, (proxy, method, args) -> {
+            String name = method.getName();
+            if ("executeUpdate".equals(name)) return 1;
+            if ("getGeneratedKeys".equals(name)) return genKeys;
+            return null;
+        });
+
+        Connection conn = createProxy(Connection.class, (proxy, method, args) -> {
+            if ("prepareStatement".equals(method.getName())) return stmt;
+            return null;
+        });
+
+        AccountDAOImpl dao = new AccountDAOImpl(createMockDataSource(conn));
+        Account account = new Account(null, 5, "ACC10001", 1, AccountType.SAVINGS,
+                new BigDecimal("500.00"), AccountStatus.ACTIVE, 0);
+
+        Account saved = dao.insert(conn, account);
+        assertNotNull(saved);
+        assertEquals(77, saved.getId());
+    }
+
+    @Test
+    public void testGenerateNextAccountNumber() {
+        ResultSet rs = createProxy(ResultSet.class, (proxy, method, args) -> {
+            String name = method.getName();
+            if ("next".equals(name)) return true;
+            if ("getInt".equals(name)) return 12; // MAX(id) is 12
+            return null;
+        });
+
+        PreparedStatement stmt = createProxy(PreparedStatement.class, (proxy, method, args) -> {
+            if ("executeQuery".equals(method.getName())) return rs;
+            return null;
+        });
+
+        Connection conn = createProxy(Connection.class, (proxy, method, args) -> {
+            if ("prepareStatement".equals(method.getName())) return stmt;
+            return null;
+        });
+
+        AccountDAOImpl dao = new AccountDAOImpl(createMockDataSource(conn));
+        String accNum = dao.generateNextAccountNumber(conn);
+
+        // 10000 + 12 + 1 = 10013 -> ACC10013
+        assertEquals("ACC10013", accNum);
+    }
 }

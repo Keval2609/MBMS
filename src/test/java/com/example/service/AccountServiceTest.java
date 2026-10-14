@@ -1,6 +1,7 @@
 package com.example.service;
 
 import com.example.dao.AccountDAO;
+import com.example.dao.CustomerDAO;
 import com.example.dao.TransactionDAO;
 import com.example.dao.TransactionManager;
 import com.example.domain.*;
@@ -224,5 +225,125 @@ public class AccountServiceTest {
         assertThrows(InsufficientFundsException.class, () ->
             service.withdraw(tellerSession, 5, new BigDecimal("150.00"))
         );
+    }
+
+    @Test
+    public void testOpenAccountSuccessWithInitialDeposit() {
+        TransactionManager tm = createPassThroughTransactionManager();
+        Customer customer = new Customer(10, "John", "Doe", "john@example.com", "555-111", "Central Ave", null);
+        AtomicReference<Transaction> loggedTxn = new AtomicReference<>();
+        AtomicReference<Account> savedAccount = new AtomicReference<>();
+
+        CustomerDAO customerDAO = createProxy(CustomerDAO.class, (proxy, method, args) -> {
+            if ("findById".equals(method.getName())) {
+                return Optional.of(customer);
+            }
+            return null;
+        });
+
+        AccountDAO accountDAO = createProxy(AccountDAO.class, (proxy, method, args) -> {
+            if ("generateNextAccountNumber".equals(method.getName())) {
+                return "ACC10001";
+            }
+            if ("insert".equals(method.getName())) {
+                Account acc = (Account) args[1];
+                acc.setId(101);
+                savedAccount.set(acc);
+                return acc;
+            }
+            return null;
+        });
+
+        TransactionDAO transactionDAO = createProxy(TransactionDAO.class, (proxy, method, args) -> {
+            if ("insert".equals(method.getName())) {
+                loggedTxn.set((Transaction) args[1]);
+            }
+            return null;
+        });
+
+        AccountService service = new AccountService(accountDAO, transactionDAO, tm, customerDAO);
+        Account created = service.openAccount(tellerSession, 10, 1, AccountType.SAVINGS, new BigDecimal("250.00"));
+
+        assertNotNull(created);
+        assertEquals(101, created.getId());
+        assertEquals("ACC10001", created.getAccountNumber());
+        assertEquals(new BigDecimal("250.00"), created.getBalance());
+        assertEquals(AccountType.SAVINGS, created.getAccountType());
+
+        assertNotNull(loggedTxn.get(), "Initial deposit must log a transaction");
+        assertEquals(TransactionType.DEPOSIT, loggedTxn.get().getType());
+        assertEquals(new BigDecimal("250.00"), loggedTxn.get().getAmount());
+        assertEquals(101, loggedTxn.get().getToAccountId());
+        assertNull(loggedTxn.get().getFromAccountId());
+    }
+
+    @Test
+    public void testOpenAccountFailsWhenCustomerNotFound() {
+        TransactionManager tm = createPassThroughTransactionManager();
+        CustomerDAO customerDAO = createProxy(CustomerDAO.class, (proxy, method, args) -> {
+            if ("findById".equals(method.getName())) {
+                return Optional.empty();
+            }
+            return null;
+        });
+
+        AccountDAO accountDAO = createProxy(AccountDAO.class, (proxy, method, args) -> null);
+        TransactionDAO transactionDAO = createProxy(TransactionDAO.class, (proxy, method, args) -> null);
+
+        AccountService service = new AccountService(accountDAO, transactionDAO, tm, customerDAO);
+
+        assertThrows(CustomerNotFoundException.class, () ->
+            service.openAccount(tellerSession, 999, 1, AccountType.SAVINGS, BigDecimal.ZERO)
+        );
+    }
+
+    @Test
+    public void testOpenAccountFailsWhenSessionUnauthorized() {
+        SessionContext customerSession = new SessionContext(9, 1, "cust", (Role) null);
+        AccountService service = new AccountService(null, null, null, null);
+
+        assertThrows(UnauthorizedAccessException.class, () ->
+            service.openAccount(customerSession, 1, 1, AccountType.SAVINGS, BigDecimal.ZERO)
+        );
+    }
+
+    @Test
+    public void testOpenAccountWithZeroDepositDoesNotLogTransaction() {
+        TransactionManager tm = createPassThroughTransactionManager();
+        Customer customer = new Customer(10, "John", "Doe", "john@example.com", "555-111", "Central Ave", null);
+        AtomicReference<Transaction> loggedTxn = new AtomicReference<>();
+
+        CustomerDAO customerDAO = createProxy(CustomerDAO.class, (proxy, method, args) -> {
+            if ("findById".equals(method.getName())) {
+                return Optional.of(customer);
+            }
+            return null;
+        });
+
+        AccountDAO accountDAO = createProxy(AccountDAO.class, (proxy, method, args) -> {
+            if ("generateNextAccountNumber".equals(method.getName())) {
+                return "ACC10002";
+            }
+            if ("insert".equals(method.getName())) {
+                Account acc = (Account) args[1];
+                acc.setId(102);
+                return acc;
+            }
+            return null;
+        });
+
+        TransactionDAO transactionDAO = createProxy(TransactionDAO.class, (proxy, method, args) -> {
+            if ("insert".equals(method.getName())) {
+                loggedTxn.set((Transaction) args[1]);
+            }
+            return null;
+        });
+
+        AccountService service = new AccountService(accountDAO, transactionDAO, tm, customerDAO);
+        Account created = service.openAccount(tellerSession, 10, 1, AccountType.SAVINGS, BigDecimal.ZERO);
+
+        assertNotNull(created);
+        assertEquals(new BigDecimal("0.00"), created.getBalance());
+        assertNull(loggedTxn.get(), "Zero deposit must not generate a transaction record");
     }
 }
