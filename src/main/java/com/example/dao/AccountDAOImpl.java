@@ -12,6 +12,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Optional;
 
 public class AccountDAOImpl implements AccountDAO {
@@ -125,6 +126,61 @@ public class AccountDAOImpl implements AccountDAO {
             return rowsAffected > 0;
         } catch (SQLException e) {
             throw new DataAccessException("Error updating account id: " + account.getId(), e);
+        }
+    }
+
+    @Override
+    public Account insert(Account account) {
+        try (Connection conn = dataSource.getConnection()) {
+            return insert(conn, account);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to insert account: " + account.getAccountNumber(), e);
+        }
+    }
+
+    @Override
+    public Account insert(Connection conn, Account account) {
+        String sql = "INSERT INTO accounts (customer_id, account_number, branch_id, account_type, balance, status, version) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setObject(1, account.getCustomerId());
+            stmt.setString(2, account.getAccountNumber());
+            stmt.setObject(3, account.getBranchId());
+            stmt.setString(4, account.getAccountType().name());
+            stmt.setBigDecimal(5, account.getBalance() != null 
+                    ? account.getBalance().setScale(2, RoundingMode.HALF_EVEN) 
+                    : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN));
+            stmt.setString(6, account.getStatus() != null ? account.getStatus().name() : AccountStatus.ACTIVE.name());
+            stmt.setInt(7, account.getVersion() != null ? account.getVersion() : 0);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new DataAccessException("Creating account failed, no rows affected.");
+            }
+
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    account.setId(generatedKeys.getInt(1));
+                } else {
+                    throw new DataAccessException("Creating account failed, no ID obtained.");
+                }
+            }
+            return account;
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to insert account: " + account.getAccountNumber(), e);
+        }
+    }
+
+    @Override
+    public String generateNextAccountNumber(Connection conn) {
+        String sql = "SELECT COALESCE(MAX(id), 0) FROM accounts";
+        try (PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            int maxId = rs.next() ? rs.getInt(1) : 0;
+            int nextNumber = 10000 + maxId + 1;
+            return String.format("ACC%05d", nextNumber);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to generate next account number", e);
         }
     }
 

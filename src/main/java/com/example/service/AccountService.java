@@ -1,14 +1,17 @@
 package com.example.service;
 
 import com.example.dao.AccountDAO;
+import com.example.dao.CustomerDAO;
 import com.example.dao.TransactionDAO;
 import com.example.dao.TransactionManager;
 import com.example.domain.*;
 import com.example.exception.AccountClosedException;
 import com.example.exception.AccountFrozenException;
 import com.example.exception.AccountNotFoundException;
+import com.example.exception.CustomerNotFoundException;
 import com.example.exception.InsufficientFundsException;
 import com.example.exception.InvalidTransferException;
+import com.example.factory.AccountFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,11 +23,17 @@ public class AccountService {
     private final AccountDAO accountDAO;
     private final TransactionDAO transactionDAO;
     private final TransactionManager transactionManager;
+    private final CustomerDAO customerDAO;
 
     public AccountService(AccountDAO accountDAO, TransactionDAO transactionDAO, TransactionManager transactionManager) {
+        this(accountDAO, transactionDAO, transactionManager, null);
+    }
+
+    public AccountService(AccountDAO accountDAO, TransactionDAO transactionDAO, TransactionManager transactionManager, CustomerDAO customerDAO) {
         this.accountDAO = accountDAO;
         this.transactionDAO = transactionDAO;
         this.transactionManager = transactionManager;
+        this.customerDAO = customerDAO;
     }
 
     public Transaction transferFunds(SessionContext session, Integer fromAccountId, Integer toAccountId, BigDecimal amount) {
@@ -186,6 +195,66 @@ public class AccountService {
             transactionDAO.insert(conn, txn);
 
             return txn;
+        });
+    }
+
+    public Account openAccount(SessionContext session, Integer customerId, Integer branchId, 
+                               AccountType accountType, BigDecimal initialDeposit) {
+        session.requireRole(Role.TELLER, Role.MANAGER, Role.BRANCH_MANAGER, Role.ADMIN);
+
+        if (customerId == null) {
+            throw new IllegalArgumentException("Customer ID is required");
+        }
+        if (customerDAO == null) {
+            throw new IllegalStateException("CustomerDAO is not configured in AccountService");
+        }
+
+        Integer effectiveBranchId = branchId != null ? branchId : session.branchId();
+        if (effectiveBranchId == null) {
+            effectiveBranchId = 1;
+        }
+
+        AccountType effectiveType = accountType != null ? accountType : AccountType.SAVINGS;
+        BigDecimal deposit = initialDeposit != null 
+                ? initialDeposit.setScale(2, RoundingMode.HALF_EVEN) 
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+
+        if (deposit.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Initial deposit cannot be negative");
+        }
+
+        final Integer finalBranchId = effectiveBranchId;
+        return transactionManager.inTransaction(conn -> {
+            // 1. Verify customer exists
+            Customer customer = customerDAO.findById(conn, customerId)
+                    .orElseThrow(() -> new CustomerNotFoundException(customerId));
+
+            // 2. Generate sequential account number
+            String accountNumber = accountDAO.generateNextAccountNumber(conn);
+
+            // 3. Create account through AccountFactory
+            Account newAccount = AccountFactory.create(effectiveType, customer.getId(), finalBranchId, accountNumber, deposit);
+
+            // 4. Persist account
+            Account created = accountDAO.insert(conn, newAccount);
+
+            // 5. If initial deposit > 0, record initial deposit transaction
+            if (deposit.compareTo(BigDecimal.ZERO) > 0) {
+                Transaction initialTxn = new Transaction(
+                        null,
+                        UUID.randomUUID().toString(),
+                        null,
+                        created.getId(),
+                        deposit,
+                        TransactionType.DEPOSIT,
+                        TransactionStatus.COMPLETED,
+                        session.employeeId() != null ? session.employeeId() : 1,
+                        new Timestamp(System.currentTimeMillis())
+                );
+                transactionDAO.insert(conn, initialTxn);
+            }
+
+            return created;
         });
     }
 }

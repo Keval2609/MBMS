@@ -2,11 +2,16 @@ package com.example;
 
 import com.example.dao.AccountDAO;
 import com.example.dao.AccountDAOImpl;
+import com.example.dao.CustomerDAO;
+import com.example.dao.CustomerDAOImpl;
 import com.example.dao.EmployeeDAO;
 import com.example.dao.EmployeeDAOImpl;
 import com.example.dao.TransactionDAO;
 import com.example.dao.TransactionDAOImpl;
 import com.example.dao.TransactionManager;
+import com.example.domain.Account;
+import com.example.domain.AccountType;
+import com.example.domain.Customer;
 import com.example.domain.Role;
 import com.example.domain.SessionContext;
 import com.example.domain.Transaction;
@@ -15,6 +20,7 @@ import com.example.exception.DataAccessException;
 import com.example.service.AccountService;
 import com.example.service.AdminService;
 import com.example.service.AuthService;
+import com.example.service.CustomerService;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
@@ -34,10 +40,12 @@ public class Main {
         AccountDAO accountDAO = new AccountDAOImpl(dataSource);
         TransactionDAO transactionDAO = new TransactionDAOImpl(dataSource);
         EmployeeDAO employeeDAO = new EmployeeDAOImpl(dataSource);
+        CustomerDAO customerDAO = new CustomerDAOImpl(dataSource);
 
         // 2. Initialize Services (Pure business rules, no direct DataSource or raw SQL)
         AuthService authService = new AuthService(employeeDAO);
-        AccountService accountService = new AccountService(accountDAO, transactionDAO, transactionManager);
+        AccountService accountService = new AccountService(accountDAO, transactionDAO, transactionManager, customerDAO);
+        CustomerService customerService = new CustomerService(customerDAO);
         AdminService adminService = new AdminService(employeeDAO);
 
         Scanner scanner = new Scanner(System.in);
@@ -78,9 +86,10 @@ public class Main {
             System.out.println("2. Deposit Funds");
             System.out.println("3. Withdraw Funds");
             System.out.println("4. View Transaction History");
+            System.out.println("5. Account & Customer Management");
             
             if (Role.ADMIN.matches(currentSession.role())) {
-                System.out.println("5. System Configuration (Admin Only)");
+                System.out.println("6. System Configuration (Admin Only)");
             }
             
             System.out.println("0. Logout and Exit");
@@ -205,6 +214,84 @@ public class Main {
                     break;
 
                 case "5":
+                    System.out.println("\n--- Account & Customer Management ---");
+                    System.out.println("1. Open New Account");
+                    System.out.println("2. Register New Customer");
+                    System.out.println("3. List Registered Customers");
+                    System.out.println("0. Back to Main Menu");
+                    System.out.print("Select an option: ");
+                    
+                    String mgmtChoice = scanner.nextLine().trim();
+                    if ("1".equals(mgmtChoice)) {
+                        System.out.println("\n--- Open New Account ---");
+                        try {
+                            System.out.print("Enter Customer ID (or 0 to register a new customer first): ");
+                            int custIdInput = Integer.parseInt(scanner.nextLine().trim());
+                            Integer customerId;
+                            if (custIdInput == 0) {
+                                Customer newCust = registerCustomer(scanner, customerService, currentSession);
+                                if (newCust == null) {
+                                    break;
+                                }
+                                customerId = newCust.getId();
+                            } else {
+                                customerId = custIdInput;
+                            }
+
+                            int defaultBranch = currentSession.branchId() != null ? currentSession.branchId() : 1;
+                            System.out.print("Enter Branch ID [Press Enter for Branch " + defaultBranch + "]: ");
+                            String branchInput = scanner.nextLine().trim();
+                            Integer branchId = branchInput.isEmpty() ? defaultBranch : Integer.parseInt(branchInput);
+
+                            System.out.print("Select Account Type (1. SAVINGS, 2. CURRENT) [Default: 1]: ");
+                            String typeInput = scanner.nextLine().trim();
+                            AccountType accountType = "2".equals(typeInput) ? AccountType.CURRENT : AccountType.SAVINGS;
+
+                            System.out.print("Enter Initial Deposit Amount [Default: 0.00]: ");
+                            String depositInput = scanner.nextLine().trim();
+                            BigDecimal initialDeposit = depositInput.isEmpty() ? BigDecimal.ZERO : new BigDecimal(depositInput);
+
+                            Account newAcc = accountService.openAccount(currentSession, customerId, branchId, accountType, initialDeposit);
+                            System.out.println("\nAccount opened successfully!");
+                            System.out.println("Account ID:      " + newAcc.getId());
+                            System.out.println("Account Number:  " + newAcc.getAccountNumber());
+                            System.out.println("Customer ID:     " + newAcc.getCustomerId());
+                            System.out.println("Branch ID:       " + newAcc.getBranchId());
+                            System.out.println("Account Type:    " + newAcc.getAccountType());
+                            System.out.println("Initial Balance: $" + newAcc.getBalance());
+                            System.out.println("Status:          " + newAcc.getStatus());
+                        } catch (NumberFormatException e) {
+                            System.out.println("Invalid numeric input: " + e.getMessage());
+                        } catch (BankException e) {
+                            System.out.println("Account opening failed: " + e.getMessage());
+                        } catch (Exception e) {
+                            System.out.println("Unexpected error: " + e.getMessage());
+                        }
+                    } else if ("2".equals(mgmtChoice)) {
+                        registerCustomer(scanner, customerService, currentSession);
+                    } else if ("3".equals(mgmtChoice)) {
+                        System.out.println("\n--- Registered Customers ---");
+                        try {
+                            List<Customer> customers = customerService.listCustomers(currentSession);
+                            if (customers.isEmpty()) {
+                                System.out.println("No customers registered yet.");
+                            } else {
+                                System.out.printf("%-5s | %-25s | %-30s | %-15s%n", "ID", "Name", "Email", "Phone");
+                                System.out.println("----------------------------------------------------------------------------------");
+                                for (Customer c : customers) {
+                                    System.out.printf("%-5d | %-25s | %-30s | %-15s%n",
+                                            c.getId(), c.getFullName(), c.getEmail(), c.getPhoneNumber());
+                                }
+                            }
+                        } catch (BankException e) {
+                            System.out.println("Failed to list customers: " + e.getMessage());
+                        } catch (Exception e) {
+                            System.out.println("Error reading customers: " + e.getMessage());
+                        }
+                    }
+                    break;
+
+                case "6":
                     if (Role.ADMIN.matches(currentSession.role())) {
                         System.out.println("\n--- Admin System Configuration ---");
                         System.out.println("1. Hire New Employee");
@@ -253,5 +340,39 @@ public class Main {
         }
         
         scanner.close();
+    }
+
+    private static Customer registerCustomer(Scanner scanner, CustomerService customerService, SessionContext session) {
+        System.out.println("\n--- Register New Customer ---");
+        try {
+            System.out.print("Enter First Name: ");
+            String firstName = scanner.nextLine().trim();
+
+            System.out.print("Enter Last Name: ");
+            String lastName = scanner.nextLine().trim();
+
+            System.out.print("Enter Email: ");
+            String email = scanner.nextLine().trim();
+
+            System.out.print("Enter Phone Number: ");
+            String phone = scanner.nextLine().trim();
+
+            System.out.print("Enter Address: ");
+            String address = scanner.nextLine().trim();
+
+            Customer customer = customerService.createCustomer(session, firstName, lastName, email, phone, address);
+            System.out.println("\nCustomer registered successfully!");
+            System.out.println("Customer ID: " + customer.getId());
+            System.out.println("Name:        " + customer.getFullName());
+            System.out.println("Email:       " + customer.getEmail());
+            System.out.println("Phone:       " + customer.getPhoneNumber());
+            return customer;
+        } catch (BankException e) {
+            System.out.println("Customer registration failed: " + e.getMessage());
+            return null;
+        } catch (Exception e) {
+            System.out.println("Error creating customer: " + e.getMessage());
+            return null;
+        }
     }
 }
