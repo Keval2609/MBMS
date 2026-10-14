@@ -5,12 +5,18 @@ public class Employee {
     private Integer branchId;
     private String username;
     private String passwordHash;
-    private String role;
+    private Role role;
 
-    // Empty constructor
     public Employee() {}
 
-    // GETTERS & SETTERS
+    public Employee(Integer id, Integer branchId, String username, String passwordHash, Role role) {
+        this.id = id;
+        this.branchId = branchId;
+        this.username = username;
+        this.passwordHash = passwordHash;
+        this.role = role;
+    }
+
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
     
@@ -23,6 +29,7 @@ public class Employee {
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     
-    public String getRole() { return role; }
-    public void setRole(String role) { this.role = role; }
+    public Role getRole() { return role; }
+    public void setRole(Role role) { this.role = role; }
+    public void setRole(String role) { this.role = Role.fromString(role); }
 }

@@ -1,120 +1,191 @@
 package com.example.service;
 
-import com.zaxxer.hikari.HikariDataSource;
+import com.example.dao.AccountDAO;
+import com.example.dao.TransactionDAO;
+import com.example.dao.TransactionManager;
+import com.example.domain.*;
+import com.example.exception.AccountClosedException;
+import com.example.exception.AccountFrozenException;
+import com.example.exception.AccountNotFoundException;
+import com.example.exception.InsufficientFundsException;
+import com.example.exception.InvalidTransferException;
+
 import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.math.RoundingMode;
+import java.sql.Timestamp;
 import java.util.UUID;
 
 public class AccountService {
 
-    private final HikariDataSource dataSource;
+    private final AccountDAO accountDAO;
+    private final TransactionDAO transactionDAO;
+    private final TransactionManager transactionManager;
 
-    public AccountService(HikariDataSource dataSource) {
-        this.dataSource = dataSource;
+    public AccountService(AccountDAO accountDAO, TransactionDAO transactionDAO, TransactionManager transactionManager) {
+        this.accountDAO = accountDAO;
+        this.transactionDAO = transactionDAO;
+        this.transactionManager = transactionManager;
     }
 
-    public boolean transferFunds(Integer fromAccountId, Integer toAccountId, BigDecimal amount, Integer employeeId) {
-        // 1. Basic validation (amount must be > 0, accounts can't be the same)
-        if (amount.compareTo(BigDecimal.ZERO) <= 0 || fromAccountId.equals(toAccountId)) {
-            return false; 
+    public Transaction transferFunds(SessionContext session, Integer fromAccountId, Integer toAccountId, BigDecimal amount) {
+        session.requireRole(Role.TELLER, Role.MANAGER, Role.BRANCH_MANAGER, Role.ADMIN);
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Transfer amount must be strictly greater than zero");
+        }
+        if (fromAccountId == null || toAccountId == null) {
+            throw new IllegalArgumentException("Account IDs cannot be null");
+        }
+        if (fromAccountId.equals(toAccountId)) {
+            throw new InvalidTransferException("Cannot transfer funds to the same account (ID: " + fromAccountId + ")");
         }
 
-        Connection conn = null;
-        try {
-            conn = dataSource.getConnection();
-            conn.setAutoCommit(false);
+        BigDecimal transferAmount = amount.setScale(2, RoundingMode.HALF_EVEN);
 
-            // Step 1: Deadlock Prevention. 
+        return transactionManager.inTransaction(conn -> {
+            // Deadlock Prevention: Always acquire pessimistic row locks in deterministic ascending ID order
             Integer lowerId = Math.min(fromAccountId, toAccountId);
             Integer higherId = Math.max(fromAccountId, toAccountId);
-             
-            // Step 2: The Locks. 
-            String lockSql = ("SELECT balance FROM accounts WHERE id = ? FOR UPDATE");
-            
-            BigDecimal fromAccountBalance = null;
-            BigDecimal toAccountBalance = null;
 
-            try (PreparedStatement lockStmt = conn.prepareStatement(lockSql)) {
-                // Lock the lower ID
-                lockStmt.setInt(1, lowerId);
-                try ( ResultSet rsLower = lockStmt.executeQuery()) {
-                    if (!rsLower.next()) throw new RuntimeException("Account not found: " + lowerId);
-                    if (lowerId.equals(fromAccountId)) {
-                        fromAccountBalance = rsLower.getBigDecimal("balance");
-                    } else {
-                        toAccountBalance = rsLower.getBigDecimal("balance");
-                    }
-                }
+            Account lowerAccount = accountDAO.findByIdForUpdate(conn, lowerId)
+                    .orElseThrow(() -> new AccountNotFoundException(lowerId));
+            Account higherAccount = accountDAO.findByIdForUpdate(conn, higherId)
+                    .orElseThrow(() -> new AccountNotFoundException(higherId));
 
-                // Lock the higher ID
-                lockStmt.setInt(1, higherId);
-                try (ResultSet rsHigher = lockStmt.executeQuery()) {
-                    if (!rsHigher.next()) throw new RuntimeException("Account not found: " + higherId); 
-                    if (higherId.equals(fromAccountId)) {
-                        fromAccountBalance = rsHigher.getBigDecimal("balance");
-                    } else {
-                        toAccountBalance = rsHigher.getBigDecimal("balance");
-                    }
-                    
-                }
+            Account fromAccount = lowerId.equals(fromAccountId) ? lowerAccount : higherAccount;
+            Account toAccount = lowerId.equals(toAccountId) ? lowerAccount : higherAccount;
+
+            // Status checks
+            if (fromAccount.getStatus() == AccountStatus.FROZEN) {
+                throw new AccountFrozenException("Source account is frozen: " + fromAccountId);
             }
-            // Step 3: The Math.
-            if (fromAccountBalance.compareTo(amount) < 0) {
-                throw new RuntimeException("Insufficient funds in account: " + fromAccountId);
-            } else {
-                fromAccountBalance = fromAccountBalance.subtract(amount);
-                toAccountBalance = toAccountBalance.add(amount);
+            if (fromAccount.getStatus() == AccountStatus.CLOSED) {
+                throw new AccountClosedException("Source account is closed: " + fromAccountId);
+            }
+            if (toAccount.getStatus() == AccountStatus.FROZEN) {
+                throw new AccountFrozenException("Destination account is frozen: " + toAccountId);
+            }
+            if (toAccount.getStatus() == AccountStatus.CLOSED) {
+                throw new AccountClosedException("Destination account is closed: " + toAccountId);
             }
 
-            // Step 4: The Updates.
-            PreparedStatement updateStmt = conn.prepareStatement("UPDATE accounts SET balance = ? WHERE id = ?");
-            updateStmt.setBigDecimal(1, fromAccountBalance);
-            updateStmt.setInt(2, fromAccountId);
-            updateStmt.executeUpdate();
-            updateStmt.setBigDecimal(1, toAccountBalance);
-            updateStmt.setInt(2, toAccountId);
-            updateStmt.executeUpdate();
+            // Invariant check: balance sufficiency
+            if (fromAccount.getBalance().compareTo(transferAmount) < 0) {
+                throw new InsufficientFundsException(
+                        "Insufficient funds in account " + fromAccountId + ". Current balance: $" + fromAccount.getBalance());
+            }
 
-            // Step 5: The Audit Log.
-            String insertTransactionSql = "INSERT INTO transactions (reference_number, from_account_id, to_account_id, amount, type, status, employee_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
-            try (PreparedStatement insertStmt = conn.prepareStatement(insertTransactionSql)) {
-                insertStmt.setString(1, UUID.randomUUID().toString());
-                insertStmt.setInt(2, fromAccountId);
-                insertStmt.setInt(3, toAccountId);
-                insertStmt.setBigDecimal(4, amount);
-                insertStmt.setString(5, "TRANSFER");
-                insertStmt.setString(6, "COMPLETED");
-                insertStmt.setInt(7, employeeId);
-                insertStmt.executeUpdate();
-            }
-            conn.commit();
-            return true;
+            BigDecimal newFromBalance = fromAccount.getBalance().subtract(transferAmount);
+            BigDecimal newToBalance = toAccount.getBalance().add(transferAmount);
 
-        } catch (Exception e) {
-            System.err.println("Transaction failed! Rolling back changes.");
-            e.printStackTrace();
-            if (conn != null) {
-                try {
-                    // THE SHIELD: Undo everything if ANY step failed
-                    conn.rollback();
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
-            return false;
-        } finally {
-            if (conn != null) {
-                try {
-                    // Always put the connection back the way you found it
-                    conn.setAutoCommit(true);
-                    conn.close();
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
+            accountDAO.updateBalance(conn, fromAccountId, newFromBalance);
+            accountDAO.updateBalance(conn, toAccountId, newToBalance);
+
+            Transaction txn = new Transaction(
+                    null,
+                    UUID.randomUUID().toString(),
+                    fromAccountId,
+                    toAccountId,
+                    transferAmount,
+                    TransactionType.TRANSFER,
+                    TransactionStatus.COMPLETED,
+                    session.employeeId(),
+                    new Timestamp(System.currentTimeMillis())
+            );
+            transactionDAO.insert(conn, txn);
+
+            return txn;
+        });
+    }
+
+    public Transaction deposit(SessionContext session, Integer accountId, BigDecimal amount) {
+        session.requireRole(Role.TELLER, Role.MANAGER, Role.BRANCH_MANAGER, Role.ADMIN);
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Deposit amount must be strictly greater than zero");
         }
+        if (accountId == null) {
+            throw new IllegalArgumentException("Account ID cannot be null");
+        }
+
+        BigDecimal depositAmount = amount.setScale(2, RoundingMode.HALF_EVEN);
+
+        return transactionManager.inTransaction(conn -> {
+            Account account = accountDAO.findByIdForUpdate(conn, accountId)
+                    .orElseThrow(() -> new AccountNotFoundException(accountId));
+
+            if (account.getStatus() == AccountStatus.FROZEN) {
+                throw new AccountFrozenException("Account is frozen: " + accountId);
+            }
+            if (account.getStatus() == AccountStatus.CLOSED) {
+                throw new AccountClosedException("Account is closed: " + accountId);
+            }
+
+            BigDecimal newBalance = account.getBalance().add(depositAmount);
+            accountDAO.updateBalance(conn, accountId, newBalance);
+
+            Transaction txn = new Transaction(
+                    null,
+                    UUID.randomUUID().toString(),
+                    null, // Deposits have no source account
+                    accountId,
+                    depositAmount,
+                    TransactionType.DEPOSIT,
+                    TransactionStatus.COMPLETED,
+                    session.employeeId(),
+                    new Timestamp(System.currentTimeMillis())
+            );
+            transactionDAO.insert(conn, txn);
+
+            return txn;
+        });
+    }
+
+    public Transaction withdraw(SessionContext session, Integer accountId, BigDecimal amount) {
+        session.requireRole(Role.TELLER, Role.MANAGER, Role.BRANCH_MANAGER, Role.ADMIN);
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Withdrawal amount must be strictly greater than zero");
+        }
+        if (accountId == null) {
+            throw new IllegalArgumentException("Account ID cannot be null");
+        }
+
+        BigDecimal withdrawAmount = amount.setScale(2, RoundingMode.HALF_EVEN);
+
+        return transactionManager.inTransaction(conn -> {
+            Account account = accountDAO.findByIdForUpdate(conn, accountId)
+                    .orElseThrow(() -> new AccountNotFoundException(accountId));
+
+            if (account.getStatus() == AccountStatus.FROZEN) {
+                throw new AccountFrozenException("Account is frozen: " + accountId);
+            }
+            if (account.getStatus() == AccountStatus.CLOSED) {
+                throw new AccountClosedException("Account is closed: " + accountId);
+            }
+
+            if (account.getBalance().compareTo(withdrawAmount) < 0) {
+                throw new InsufficientFundsException(
+                        "Insufficient funds in account " + accountId + ". Current balance: $" + account.getBalance());
+            }
+
+            BigDecimal newBalance = account.getBalance().subtract(withdrawAmount);
+            accountDAO.updateBalance(conn, accountId, newBalance);
+
+            Transaction txn = new Transaction(
+                    null,
+                    UUID.randomUUID().toString(),
+                    accountId,
+                    null, // Withdrawals have no destination account
+                    withdrawAmount,
+                    TransactionType.WITHDRAWAL,
+                    TransactionStatus.COMPLETED,
+                    session.employeeId(),
+                    new Timestamp(System.currentTimeMillis())
+            );
+            transactionDAO.insert(conn, txn);
+
+            return txn;
+        });
     }
 }

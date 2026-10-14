@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -17,6 +16,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -137,6 +137,56 @@ public class AccountDAOTest {
         assertEquals(new BigDecimal("1500.00"), account.getBalance());
         assertEquals(2, account.getVersion());
         assertEquals("ACC-101-FRZ", params.get(1));
+    }
+
+    @Test
+    public void testFindByIdForUpdateUsesPessimisticLockSql() {
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", 50);
+        row.put("customer_id", 2);
+        row.put("branch_id", 1);
+        row.put("account_number", "ACC-50");
+        row.put("balance", new BigDecimal("750.00"));
+        row.put("status", "ACTIVE");
+        row.put("account_type", "SAVINGS");
+        row.put("version", 0);
+
+        ResultSet rs = createMockResultSet(row, true);
+        AtomicReference<String> executedSql = new AtomicReference<>();
+        Map<Integer, Object> params = new HashMap<>();
+        PreparedStatement stmt = createPreparedStatementWithResultSet(rs, params);
+
+        Connection conn = createProxy(Connection.class, (proxy, method, args) -> {
+            if ("prepareStatement".equals(method.getName())) {
+                executedSql.set((String) args[0]);
+                return stmt;
+            }
+            return null;
+        });
+
+        AccountDAOImpl dao = new AccountDAOImpl(createMockDataSource(conn));
+        Optional<Account> result = dao.findByIdForUpdate(conn, 50);
+
+        assertTrue(result.isPresent());
+        assertTrue(executedSql.get().toUpperCase().contains("FOR UPDATE"), "SQL must contain FOR UPDATE");
+        assertEquals(50, params.get(1));
+    }
+
+    @Test
+    public void testUpdateBalanceIncrementsVersionAndEnforcesSingleRow() {
+        Map<Integer, Object> params = new HashMap<>();
+        PreparedStatement stmt = createPreparedStatementForUpdate(1, params);
+
+        Connection conn = createProxy(Connection.class, (proxy, method, args) -> {
+            if ("prepareStatement".equals(method.getName())) return stmt;
+            return null;
+        });
+
+        AccountDAOImpl dao = new AccountDAOImpl(createMockDataSource(conn));
+        dao.updateBalance(conn, 77, new BigDecimal("123.456"));
+
+        assertEquals(new BigDecimal("123.46"), params.get(1), "Balance must be scaled to 2 decimal places with HALF_EVEN");
+        assertEquals(77, params.get(2));
     }
 
     @Test
