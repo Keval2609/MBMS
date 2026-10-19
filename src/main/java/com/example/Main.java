@@ -318,10 +318,10 @@ public class Main {
                                 System.out.println("Successfully hired " + newUsername + " as a " + newRole + "!");
                             } catch (NumberFormatException e) {
                                 System.out.println("Invalid input. Branch ID must be a number.");
-                            } catch (BankException e) {
-                                System.out.println("Failed to create employee: " + e.getMessage());
                             } catch (DataAccessException e) {
                                 System.out.println("Database error: " + e.getMessage());
+                            } catch (BankException e) {
+                                System.out.println("Failed to create employee: " + e.getMessage());
                             }
                         }
                     } else {
