@@ -15,7 +15,7 @@ import com.example.factory.AccountFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
 
 public class AccountService {
@@ -99,7 +99,7 @@ public class AccountService {
                     TransactionType.TRANSFER,
                     TransactionStatus.COMPLETED,
                     session.employeeId(),
-                    new Timestamp(System.currentTimeMillis())
+                    Instant.now()
             );
             transactionDAO.insert(conn, txn);
 
@@ -142,7 +142,7 @@ public class AccountService {
                     TransactionType.DEPOSIT,
                     TransactionStatus.COMPLETED,
                     session.employeeId(),
-                    new Timestamp(System.currentTimeMillis())
+                    Instant.now()
             );
             transactionDAO.insert(conn, txn);
 
@@ -190,7 +190,7 @@ public class AccountService {
                     TransactionType.WITHDRAWAL,
                     TransactionStatus.COMPLETED,
                     session.employeeId(),
-                    new Timestamp(System.currentTimeMillis())
+                    Instant.now()
             );
             transactionDAO.insert(conn, txn);
 
@@ -249,7 +249,7 @@ public class AccountService {
                         TransactionType.DEPOSIT,
                         TransactionStatus.COMPLETED,
                         session.employeeId() != null ? session.employeeId() : 1,
-                        new Timestamp(System.currentTimeMillis())
+                        Instant.now()
                 );
                 transactionDAO.insert(conn, initialTxn);
             }

@@ -62,6 +62,8 @@ public class CustomerDAOTest {
         assertEquals("Alice", result.get().getFirstName());
         assertEquals("Smith", result.get().getLastName());
         assertEquals("alice@example.com", result.get().getEmail());
+        assertNotNull(result.get().getCreatedAt());
+        assertInstanceOf(java.time.Instant.class, result.get().getCreatedAt());
     }
 
     @Test

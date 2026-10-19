@@ -34,6 +34,10 @@ public class EmployeeDAOTest {
                 if ("branch_id".equals(args[0])) return 10;
                 return 0;
             }
+            if ("getObject".equals(name)) {
+                if ("branch_id".equals(args[0])) return 10;
+                return null;
+            }
             if ("getString".equals(name)) {
                 if ("username".equals(args[0])) return "admin";
                 if ("password_hash".equals(args[0])) return "$2a$10$hash";
@@ -92,7 +96,7 @@ public class EmployeeDAOTest {
         Map<Integer, Object> params = new HashMap<>();
         PreparedStatement stmt = createProxy(PreparedStatement.class, (proxy, method, args) -> {
             if ("executeUpdate".equals(method.getName())) return 1;
-            if ("setString".equals(method.getName()) || "setInt".equals(method.getName())) {
+            if ("setString".equals(method.getName()) || "setInt".equals(method.getName()) || "setObject".equals(method.getName())) {
                 params.put((Integer) args[0], args[1]);
                 return null;
             }
@@ -118,4 +122,49 @@ public class EmployeeDAOTest {
         assertEquals("secretHash", params.get(3));
         assertEquals("TELLER", params.get(4));
     }
+
+    @Test
+    public void testFindByUsernameWithNullBranchId() {
+        ResultSet rs = createProxy(ResultSet.class, (proxy, method, args) -> {
+            String name = method.getName();
+            if ("next".equals(name)) return true;
+            if ("getInt".equals(name)) {
+                if ("id".equals(args[0])) return 2;
+                return 0;
+            }
+            if ("getObject".equals(name)) {
+                if ("branch_id".equals(args[0])) return null;
+                return null;
+            }
+            if ("getString".equals(name)) {
+                if ("username".equals(args[0])) return "hq_admin";
+                if ("password_hash".equals(args[0])) return "$2a$10$hash";
+                if ("role".equals(args[0])) return "ADMIN";
+                return "";
+            }
+            return null;
+        });
+
+        PreparedStatement stmt = createProxy(PreparedStatement.class, (proxy, method, args) -> {
+            if ("executeQuery".equals(method.getName())) return rs;
+            return null;
+        });
+
+        Connection conn = createProxy(Connection.class, (proxy, method, args) -> {
+            if ("prepareStatement".equals(method.getName())) return stmt;
+            return null;
+        });
+
+        DataSource ds = createProxy(DataSource.class, (proxy, method, args) -> {
+            if ("getConnection".equals(method.getName())) return conn;
+            return null;
+        });
+
+        EmployeeDAOImpl dao = new EmployeeDAOImpl(ds);
+        Optional<Employee> emp = dao.findByUsername("hq_admin");
+
+        assertTrue(emp.isPresent());
+        assertNull(emp.get().getBranchId(), "branch_id should be null when employee belongs to HQ, not 0");
+    }
 }
+

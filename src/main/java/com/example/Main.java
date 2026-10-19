@@ -194,7 +194,7 @@ public class Main {
                                     sign = "-";
                                 }
 
-                                String dateStr = txn.getCreatedAt() != null ? txn.getCreatedAt().toString().substring(0, Math.min(19, txn.getCreatedAt().toString().length())) : "N/A";
+                                String dateStr = txn.getCreatedAt() != null ? txn.getCreatedAt().toString().replace('T', ' ').substring(0, Math.min(19, txn.getCreatedAt().toString().length())) : "N/A";
                                 System.out.printf("%-19s | %-36s | %-10s | %-20s | %s$%-9.2f | %s%n", 
                                     dateStr, 
                                     txn.getReferenceNumber(),
@@ -318,10 +318,10 @@ public class Main {
                                 System.out.println("Successfully hired " + newUsername + " as a " + newRole + "!");
                             } catch (NumberFormatException e) {
                                 System.out.println("Invalid input. Branch ID must be a number.");
-                            } catch (BankException e) {
-                                System.out.println("Failed to create employee: " + e.getMessage());
                             } catch (DataAccessException e) {
                                 System.out.println("Database error: " + e.getMessage());
+                            } catch (BankException e) {
+                                System.out.println("Failed to create employee: " + e.getMessage());
                             }
                         }
                     } else {

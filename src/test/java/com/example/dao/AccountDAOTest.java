@@ -89,6 +89,16 @@ public class AccountDAOTest {
                 Object v = values.get(args[0]);
                 return v != null ? ((Number) v).intValue() : 0;
             }
+            if ("getObject".equals(name)) {
+                Object v = values.get(args[0]);
+                if (v == null) return null;
+                if (args.length >= 2 && args[1] instanceof Class<?> clazz) {
+                    if (clazz == Integer.class && v instanceof Number) {
+                        return ((Number) v).intValue();
+                    }
+                }
+                return v;
+            }
             if ("getString".equals(name)) {
                 Object v = values.get(args[0]);
                 return v != null ? v.toString() : null;
@@ -401,5 +411,32 @@ public class AccountDAOTest {
 
         // 10000 + 12 + 1 = 10013 -> ACC10013
         assertEquals("ACC10013", accNum);
+    }
+
+    @Test
+    public void testMapRowWithNullableFieldsPreservesNull() {
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", 105);
+        row.put("customer_id", null);
+        row.put("branch_id", null);
+        row.put("account_number", "ACC-NULL-1");
+        row.put("balance", new BigDecimal("100.00"));
+        row.put("status", "ACTIVE");
+        row.put("account_type", "SAVINGS");
+        row.put("version", 0);
+
+        ResultSet rs = createMockResultSet(row, true);
+        PreparedStatement stmt = createPreparedStatementWithResultSet(rs, null);
+        Connection conn = createProxy(Connection.class, (proxy, method, args) -> {
+            if ("prepareStatement".equals(method.getName())) return stmt;
+            return null;
+        });
+
+        AccountDAOImpl dao = new AccountDAOImpl(createMockDataSource(conn));
+        Optional<Account> accountOpt = dao.findById(conn, 105);
+
+        assertTrue(accountOpt.isPresent());
+        assertNull(accountOpt.get().getCustomerId(), "customer_id should be null, not 0");
+        assertNull(accountOpt.get().getBranchId(), "branch_id should be null, not 0");
     }
 }
