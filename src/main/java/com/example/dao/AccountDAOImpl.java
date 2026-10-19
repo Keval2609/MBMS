@@ -187,13 +187,13 @@ public class AccountDAOImpl implements AccountDAO {
     private Account mapRowToAccount(ResultSet rs) throws SQLException {
         Account account = new Account();
         account.setId(rs.getInt("id"));
-        account.setCustomerId(rs.getInt("customer_id"));
-        account.setBranchId(rs.getInt("branch_id"));
+        account.setCustomerId(rs.getObject("customer_id", Integer.class));
+        account.setBranchId(rs.getObject("branch_id", Integer.class));
         account.setAccountNumber(rs.getString("account_number"));
         account.setBalance(rs.getBigDecimal("balance"));
         account.setStatus(AccountStatus.valueOf(rs.getString("status")));
         account.setAccountType(AccountType.valueOf(rs.getString("account_type")));
-        account.setVersion(rs.getInt("version"));
+        account.setVersion(rs.getObject("version", Integer.class));
         return account;
     }
 }

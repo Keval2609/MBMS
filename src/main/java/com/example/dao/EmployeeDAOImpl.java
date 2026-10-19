@@ -40,7 +40,7 @@ public class EmployeeDAOImpl implements EmployeeDAO {
                     employee.setUsername(rs.getString("username"));
                     employee.setPasswordHash(rs.getString("password_hash"));
                     employee.setRole(Role.fromString(rs.getString("role")));
-                    employee.setBranchId(rs.getInt("branch_id"));
+                    employee.setBranchId(rs.getObject("branch_id", Integer.class));
                     return Optional.of(employee);
                 }
                 return Optional.empty();
@@ -63,7 +63,7 @@ public class EmployeeDAOImpl implements EmployeeDAO {
     public void insert(Connection conn, Employee employee) {
         String sql = "INSERT INTO employees (branch_id, username, password_hash, role) VALUES (?, ?, ?, ?)";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, employee.getBranchId());
+            stmt.setObject(1, employee.getBranchId(), java.sql.Types.INTEGER);
             stmt.setString(2, employee.getUsername());
             stmt.setString(3, employee.getPasswordHash());
             stmt.setString(4, employee.getRole().name());
