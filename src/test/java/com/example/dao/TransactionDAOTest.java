@@ -79,6 +79,8 @@ public class TransactionDAOTest {
         assertEquals(5, txn.getToAccountId());
         assertEquals(TransactionType.DEPOSIT, txn.getType());
         assertEquals(TransactionStatus.COMPLETED, txn.getStatus());
+        assertNotNull(txn.getCreatedAt());
+        assertInstanceOf(java.time.Instant.class, txn.getCreatedAt());
     }
 
     @Test
@@ -114,7 +116,7 @@ public class TransactionDAOTest {
                 TransactionType.TRANSFER,
                 TransactionStatus.COMPLETED,
                 1,
-                new Timestamp(System.currentTimeMillis())
+                java.time.Instant.now()
         );
 
         dao.insert(conn, txn);

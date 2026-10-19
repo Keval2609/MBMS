@@ -1,6 +1,6 @@
 package com.example.domain;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 
 public class Customer {
     private Integer id;
@@ -9,12 +9,12 @@ public class Customer {
     private String email;
     private String phoneNumber;
     private String address;
-    private Timestamp createdAt;
+    private Instant createdAt;
 
     public Customer() {
     }
 
-    public Customer(Integer id, String firstName, String lastName, String email, String phoneNumber, String address, Timestamp createdAt) {
+    public Customer(Integer id, String firstName, String lastName, String email, String phoneNumber, String address, Instant createdAt) {
         this.id = id;
         this.firstName = firstName;
         this.lastName = lastName;
@@ -80,11 +80,11 @@ public class Customer {
         this.address = address;
     }
 
-    public Timestamp getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(Timestamp createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 }

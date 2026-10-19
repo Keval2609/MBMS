@@ -50,7 +50,8 @@ public class TransactionDAOImpl implements TransactionDAO {
                     transaction.setType(TransactionType.valueOf(rs.getString("type")));
                     transaction.setStatus(TransactionStatus.valueOf(rs.getString("status")));
                     transaction.setEmployeeId(rs.getInt("employee_id"));
-                    transaction.setCreatedAt(rs.getTimestamp("timestamp"));
+                    java.sql.Timestamp ts = rs.getTimestamp("timestamp");
+                    transaction.setCreatedAt(ts != null ? ts.toInstant() : null);
                     transactions.add(transaction);
                 }
             }

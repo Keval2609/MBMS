@@ -115,7 +115,8 @@ public class CustomerDAOImpl implements CustomerDAO {
         c.setEmail(rs.getString("email"));
         c.setPhoneNumber(rs.getString("phone_number"));
         c.setAddress(rs.getString("address"));
-        c.setCreatedAt(rs.getTimestamp("created_at"));
+        java.sql.Timestamp ts = rs.getTimestamp("created_at");
+        c.setCreatedAt(ts != null ? ts.toInstant() : null);
         return c;
     }
 }

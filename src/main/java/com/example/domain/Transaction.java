@@ -2,7 +2,7 @@ package com.example.domain;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.Timestamp;
+import java.time.Instant;
 
 public class Transaction {
     private Integer id;
@@ -13,13 +13,13 @@ public class Transaction {
     private TransactionType type;
     private TransactionStatus status;
     private Integer employeeId;
-    private Timestamp createdAt;
+    private Instant createdAt;
 
     public Transaction() {}
 
     public Transaction(Integer id, String referenceNumber, Integer fromAccountId, Integer toAccountId,
                        BigDecimal amount, TransactionType type, TransactionStatus status,
-                       Integer employeeId, Timestamp createdAt) {
+                       Integer employeeId, Instant createdAt) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.fromAccountId = fromAccountId;
@@ -57,6 +57,6 @@ public class Transaction {
     public Integer getEmployeeId() { return employeeId; }
     public void setEmployeeId(Integer employeeId) { this.employeeId = employeeId; }
 
-    public Timestamp getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
-}
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+}
