@@ -1,5 +1,9 @@
 package com.example.domain;
 
+import com.example.exception.AccountClosedException;
+import com.example.exception.AccountFrozenException;
+import com.example.exception.InsufficientFundsException;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
@@ -54,4 +58,21 @@ public class Account {
 
     public AccountStatus getStatus() { return status; }
     public void setStatus(AccountStatus status) { this.status = status; }
-}
+
+    public void assertCanTransact() {
+        if (this.status == AccountStatus.FROZEN) {
+            throw new AccountFrozenException("Account is frozen: " + this.id);
+        }
+        if (this.status == AccountStatus.CLOSED) {
+            throw new AccountClosedException("Account is closed: " + this.id);
+        }
+    }
+
+    public void assertSufficientFunds(BigDecimal amount) {
+        if (this.balance == null || this.balance.compareTo(amount) < 0) {
+            throw new InsufficientFundsException(
+                "Insufficient funds in account " + this.id + ". Current balance: $" + this.balance
+            );
+        }
+    }
+}
