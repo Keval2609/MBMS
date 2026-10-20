@@ -92,6 +92,68 @@ public class AccountServiceTest {
     }
 
     @Test
+    public void testTransferFailsWhenDestinationAccountIsFrozen() {
+        TransactionManager tm = createPassThroughTransactionManager();
+
+        Account active = new Account(1, 10, "ACC-1", 1, AccountType.SAVINGS, new BigDecimal("200.00"), AccountStatus.ACTIVE, 0);
+        Account frozen = new Account(2, 20, "ACC-2", 1, AccountType.SAVINGS, new BigDecimal("100.00"), AccountStatus.FROZEN, 0);
+
+        AccountDAO accountDAO = createProxy(AccountDAO.class, (proxy, method, args) -> {
+            if ("findByIdForUpdate".equals(method.getName())) {
+                Integer id = (Integer) args[1];
+                if (id == 1) return Optional.of(active);
+                if (id == 2) return Optional.of(frozen);
+            }
+            return Optional.empty();
+        });
+
+        TransactionDAO txnDAO = createProxy(TransactionDAO.class, (proxy, method, args) -> null);
+
+        AccountService service = new AccountService(accountDAO, txnDAO, tm);
+        assertThrows(AccountFrozenException.class, () ->
+            service.transferFunds(tellerSession, 1, 2, new BigDecimal("50.00"))
+        );
+    }
+
+    @Test
+    public void testDepositFailsWhenAccountFrozen() {
+        TransactionManager tm = createPassThroughTransactionManager();
+        Account target = new Account(5, 10, "ACC-5", 1, AccountType.SAVINGS, new BigDecimal("300.00"), AccountStatus.FROZEN, 0);
+
+        AccountDAO accountDAO = createProxy(AccountDAO.class, (proxy, method, args) -> {
+            if ("findByIdForUpdate".equals(method.getName())) {
+                return Optional.of(target);
+            }
+            return null;
+        });
+        TransactionDAO txnDAO = createProxy(TransactionDAO.class, (proxy, method, args) -> null);
+        AccountService service = new AccountService(accountDAO, txnDAO, tm);
+
+        assertThrows(AccountFrozenException.class, () ->
+            service.deposit(tellerSession, 5, new BigDecimal("100.00"))
+        );
+    }
+
+    @Test
+    public void testWithdrawFailsWhenAccountFrozen() {
+        TransactionManager tm = createPassThroughTransactionManager();
+        Account target = new Account(5, 10, "ACC-5", 1, AccountType.SAVINGS, new BigDecimal("300.00"), AccountStatus.FROZEN, 0);
+
+        AccountDAO accountDAO = createProxy(AccountDAO.class, (proxy, method, args) -> {
+            if ("findByIdForUpdate".equals(method.getName())) {
+                return Optional.of(target);
+            }
+            return null;
+        });
+        TransactionDAO txnDAO = createProxy(TransactionDAO.class, (proxy, method, args) -> null);
+        AccountService service = new AccountService(accountDAO, txnDAO, tm);
+
+        assertThrows(AccountFrozenException.class, () ->
+            service.withdraw(tellerSession, 5, new BigDecimal("100.00"))
+        );
+    }
+
+    @Test
     public void testTransferFailsOnInsufficientFunds() {
         TransactionManager tm = createPassThroughTransactionManager();
 

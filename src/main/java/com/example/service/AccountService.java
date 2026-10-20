@@ -64,38 +64,19 @@ public class AccountService {
             Account fromAccount = lowerId.equals(fromAccountId) ? lowerAccount : higherAccount;
             Account toAccount = lowerId.equals(toAccountId) ? lowerAccount : higherAccount;
 
-            // Status checks
-            if (fromAccount.getStatus() == AccountStatus.FROZEN) {
-                throw new AccountFrozenException("Source account is frozen: " + fromAccountId);
-            }
-            if (fromAccount.getStatus() == AccountStatus.CLOSED) {
-                throw new AccountClosedException("Source account is closed: " + fromAccountId);
-            }
-            if (toAccount.getStatus() == AccountStatus.FROZEN) {
-                throw new AccountFrozenException("Destination account is frozen: " + toAccountId);
-            }
-            if (toAccount.getStatus() == AccountStatus.CLOSED) {
-                throw new AccountClosedException("Destination account is closed: " + toAccountId);
-            }
+            // Pure decision step:
+            TransferPlan plan = TransferPolicy.calculateTransfer(fromAccount, toAccount, transferAmount);
 
-            // Invariant check: balance sufficiency
-            if (fromAccount.getBalance().compareTo(transferAmount) < 0) {
-                throw new InsufficientFundsException(
-                        "Insufficient funds in account " + fromAccountId + ". Current balance: $" + fromAccount.getBalance());
-            }
-
-            BigDecimal newFromBalance = fromAccount.getBalance().subtract(transferAmount);
-            BigDecimal newToBalance = toAccount.getBalance().add(transferAmount);
-
-            accountDAO.updateBalance(conn, fromAccountId, newFromBalance);
-            accountDAO.updateBalance(conn, toAccountId, newToBalance);
+            // Side-effect persistence step:
+            accountDAO.updateBalance(conn, fromAccountId, plan.newFromBalance());
+            accountDAO.updateBalance(conn, toAccountId, plan.newToBalance());
 
             Transaction txn = new Transaction(
                     null,
                     UUID.randomUUID().toString(),
                     fromAccountId,
                     toAccountId,
-                    transferAmount,
+                    plan.transferAmount(),
                     TransactionType.TRANSFER,
                     TransactionStatus.COMPLETED,
                     session.employeeId(),
@@ -123,12 +104,7 @@ public class AccountService {
             Account account = accountDAO.findByIdForUpdate(conn, accountId)
                     .orElseThrow(() -> new AccountNotFoundException(accountId));
 
-            if (account.getStatus() == AccountStatus.FROZEN) {
-                throw new AccountFrozenException("Account is frozen: " + accountId);
-            }
-            if (account.getStatus() == AccountStatus.CLOSED) {
-                throw new AccountClosedException("Account is closed: " + accountId);
-            }
+            account.assertCanTransact();
 
             BigDecimal newBalance = account.getBalance().add(depositAmount);
             accountDAO.updateBalance(conn, accountId, newBalance);
@@ -166,17 +142,8 @@ public class AccountService {
             Account account = accountDAO.findByIdForUpdate(conn, accountId)
                     .orElseThrow(() -> new AccountNotFoundException(accountId));
 
-            if (account.getStatus() == AccountStatus.FROZEN) {
-                throw new AccountFrozenException("Account is frozen: " + accountId);
-            }
-            if (account.getStatus() == AccountStatus.CLOSED) {
-                throw new AccountClosedException("Account is closed: " + accountId);
-            }
-
-            if (account.getBalance().compareTo(withdrawAmount) < 0) {
-                throw new InsufficientFundsException(
-                        "Insufficient funds in account " + accountId + ". Current balance: $" + account.getBalance());
-            }
+            account.assertCanTransact();
+            account.assertSufficientFunds(withdrawAmount);
 
             BigDecimal newBalance = account.getBalance().subtract(withdrawAmount);
             accountDAO.updateBalance(conn, accountId, newBalance);
